@@ -13,9 +13,9 @@
  (testing "basic render test"
     (let [comp (component "simple-div.html" {}) ]
       (is (= "<div id=\"tmp\">test</div>" comp))))
- 
+
   (testing "content replace"
-    (let [comp (component "simple-div.html" 
+    (let [comp (component "simple-div.html"
                           {[:div] (content "success")})]
       (is (= "<div id=\"tmp\">success</div>" comp))))
   (testing "first-of-type naked symbol"
@@ -116,4 +116,8 @@
     (let [comp (component "simple-div.html"
                           {[:div] (html-content "<h1>t1</h1><em><span>t2</span></em>")})]
       (is (= "<div id=\"tmp\"><h1>t1</h1><em><span>t2</span></em></div>"
-             comp)))))
+             comp))))
+
+  (testing "nesting test"
+    (let [comp (component "nesting.html" {})]
+      (is (= "<a><h1>testing</h1></a>" comp)))))

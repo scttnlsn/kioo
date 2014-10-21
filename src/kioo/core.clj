@@ -3,6 +3,7 @@
   (:require [kioo.util :refer [convert-attrs flatten-nodes]]
             [net.cgrand.enlive-html :refer [at html-resource select
                                             any-node]]
+            [net.cgrand.jsoup :as jsoup]
             [clojure.string :as string]
             [enlive-ws.core :refer [->MiniHtml]]))
 
@@ -53,7 +54,6 @@
   ([path sel trans opts]
      (component* path sel trans (merge react-emit-opts (eval opts)))))
 
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Using Enlive to do selection and
 ;; attache base transforms
@@ -65,7 +65,7 @@
                            (cljs.core/-> node#
                                (~(:trans node))
                                (~trans))))
-      (assoc node :trans trans)))) 
+      (assoc node :trans trans))))
 
 
 (defn resolve-enlive-var [sym]
@@ -111,18 +111,25 @@
   ([path trans emit-opts]
      (component* path [:body :> any-node] trans emit-opts))
   ([path sel trans emit-opts]
+   (binding [net.cgrand.enlive-html/*options* {:parser jsoup/parser}]
      (let [resource-fn (or (resolve-resource-fn path emit-opts) identity)
            root (html-resource (resource-fn path))
-            start (if (= :root sel)
-                    root
-                    (select root (eval-selector sel)))
-           child-sym (gensym "ch")]
-        (assert (or (empty? trans) (map? trans))
-                "Transforms must be a map - Kioo only supports order independent transforms")
-        `(let [~child-sym ~(compile (map-trans start trans) emit-opts)]
-           (if (= 1 (count ~child-sym))
-             (first ~child-sym)
-             ~((:wrap-fragment emit-opts) :span child-sym))))))
+           start (if (= :root sel)
+                   root
+                   (select root (eval-selector sel)))
+           child-sym (gensym "ch")
+           resource-wrapper (:resource-wrapper emit-opts)]
+       (assert (or (empty? trans) (map? trans))
+               "Transforms must be a map - Kioo only supports order independent transforms")
+       `(let [~child-sym ~(compile (map-trans start trans) emit-opts)]
+          (if (or
+                (= 1 (count ~child-sym))
+                (and
+                  (= 2 (count ~child-sym))
+                  (= (last ~child-sym) "\n")
+                  (not (= :html ~resource-wrapper))))
+            (first ~child-sym)
+            ~((:wrap-fragment emit-opts) :span child-sym)))))))
 
 
 (defn compile-node
@@ -142,7 +149,7 @@
   (let [nodes (if (map? node) [node] node)
         cnodes (vec (filter identity
                             (map #(cond
-                                   (map? %) (compile-node % emit-opts) 
+                                   (map? %) (compile-node % emit-opts)
                                    (string? %) (if (:emit-str emit-opts)
                                                  ((:emit-str emit-opts) %)
                                                  %)
